@@ -1,68 +1,88 @@
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel
+from PyQt6.QtWidgets import QLabel, QSizePolicy
 from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QPixmap, QImage
+from PyQt6.QtGui import QImage, QPixmap
 import cv2
 import numpy as np
+from PIL import Image
+import io
 
-class ImageViewer(QWidget):
+class ImageViewer(QLabel):
     def __init__(self):
         super().__init__()
-        self.init_ui()
         self.image_path = None
-
-    def init_ui(self):
-        layout = QVBoxLayout()
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(5)
-
-        # Image container
-        self.container = QWidget()
-        self.container.setStyleSheet("""
-            QWidget {
-                background-color: #f8f9fa;
-                border: 2px dashed #e1e4e8;
-                border-radius: 8px;
-            }
-        """)
-        container_layout = QVBoxLayout(self.container)
-        container_layout.setContentsMargins(5, 5, 5, 5)
-        
-        # Image display
-        self.image_label = QLabel("Drop image here\nor click to upload")
-        self.image_label.setStyleSheet("""
+        self.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.setMinimumSize(200, 150)
+        self.setMaximumHeight(300)
+        self.setStyleSheet("""
             QLabel {
-                color: #6e7582;
-                font-size: 12px;
+                background-color: #363636;
+                border: 1px solid #404040;
+                border-radius: 3px;
             }
         """)
-        self.image_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.image_label.setMinimumSize(200, 200)
-        self.image_label.setMaximumSize(200, 200)
-        container_layout.addWidget(self.image_label)
-        
-        layout.addWidget(self.container)
-        self.setLayout(layout)
 
     def load_image(self, image_path):
+        """Load image from file path"""
         self.image_path = image_path
-        pixmap = QPixmap(image_path)
+        image = cv2.imread(image_path)
+        if image is not None:
+            image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+            self._display_image(image)
+
+    def load_image_from_array(self, image_array):
+        """Load image from numpy array (BGR format)"""
+        if image_array is not None:
+            if len(image_array.shape) == 2:  # Grayscale
+                image_array = cv2.cvtColor(image_array, cv2.COLOR_GRAY2RGB)
+            elif image_array.shape[2] == 3:  # BGR
+                image_array = cv2.cvtColor(image_array, cv2.COLOR_BGR2RGB)
+            self._display_image(image_array)
+
+    def load_image_from_pil(self, pil_image):
+        """Load image from PIL Image object"""
+        if pil_image is not None:
+            # Convert PIL image to numpy array
+            image_array = np.array(pil_image)
+            if len(image_array.shape) == 2:  # Grayscale
+                image_array = cv2.cvtColor(image_array, cv2.COLOR_GRAY2RGB)
+            elif image_array.shape[2] == 4:  # RGBA
+                image_array = cv2.cvtColor(image_array, cv2.COLOR_RGBA2RGB)
+            self._display_image(image_array)
+
+    def _display_image(self, image_array):
+        """Display image array in the label"""
+        h, w = image_array.shape[:2]
+        bytes_per_line = 3 * w
+
+        # Create QImage from numpy array
+        q_image = QImage(
+            image_array.data,
+            w, h,
+            bytes_per_line,
+            QImage.Format.Format_RGB888
+        )
+
+        # Scale image to fit the label while maintaining aspect ratio
+        pixmap = QPixmap.fromImage(q_image)
         scaled_pixmap = pixmap.scaled(
-            200, 200,
+            self.size(),
             Qt.AspectRatioMode.KeepAspectRatio,
             Qt.TransformationMode.SmoothTransformation
         )
-        self.image_label.setPixmap(scaled_pixmap)
+        self.setPixmap(scaled_pixmap)
 
     def get_image_path(self):
+        """Return the current image path"""
         return self.image_path
 
-    def set_image_from_array(self, image_array):
-        height, width = image_array.shape[:2]
-        bytes_per_line = 3 * width
-        image = QImage(image_array.data, width, height, 
-                      bytes_per_line, QImage.Format.Format_RGB888)
-        pixmap = QPixmap.fromImage(image)
-        scaled_pixmap = pixmap.scaled(300, 300, 
-                                    Qt.AspectRatioMode.KeepAspectRatio,
-                                    Qt.TransformationMode.SmoothTransformation)
-        self.image_label.setPixmap(scaled_pixmap) 
+    def resizeEvent(self, event):
+        """Handle resize events to maintain aspect ratio"""
+        super().resizeEvent(event)
+        if self.pixmap():
+            scaled_pixmap = self.pixmap().scaled(
+                self.size(),
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation
+            )
+            self.setPixmap(scaled_pixmap) 

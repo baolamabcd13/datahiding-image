@@ -1,131 +1,110 @@
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
-                           QLabel, QFrame, QGridLayout, QFileDialog)
+                           QLabel, QFrame, QGridLayout, QFileDialog, QMessageBox)
 from PyQt6.QtCore import Qt
 from ..widgets.image_viewer import ImageViewer
+from ..steganography.analyst import SteganographyAnalyst
 
 class AnalysisTab(QWidget):
     def __init__(self):
         super().__init__()
+        self.analyst = SteganographyAnalyst()
         self.init_ui()
 
     def init_ui(self):
+        # Main layout
         layout = QVBoxLayout()
-        layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(15)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
 
-        # Title
-        title = QLabel("Image Analysis")
+        # Title area
+        title_container = QWidget()
+        title_container.setStyleSheet("""
+            QWidget {
+                background-color: #2b2b2b;
+                border-bottom: 1px solid #3d3d3d;
+            }
+        """)
+        title_layout = QHBoxLayout(title_container)
+        title_layout.setContentsMargins(20, 12, 20, 12)
+
+        title = QLabel("Steganography Analysis")
         title.setStyleSheet("""
             QLabel {
-                font-size: 20px;
-                font-weight: bold;
-                color: #2d3436;
+                color: #ffffff;
+                font-size: 18px;
+                font-weight: 500;
             }
         """)
-        layout.addWidget(title)
+        title_layout.addWidget(title)
+        layout.addWidget(title_container)
 
-        # Content container
-        content = QFrame()
-        content.setStyleSheet("""
-            QFrame {
-                background-color: white;
-                border-radius: 12px;
-            }
-        """)
+        # Content
+        content = QWidget()
+        content.setStyleSheet("QWidget { background-color: #1e1e1e; }")
         content_layout = QVBoxLayout(content)
         content_layout.setContentsMargins(20, 20, 20, 20)
-        content_layout.setSpacing(15)
+        content_layout.setSpacing(16)
 
-        # Images grid
-        images_grid = QGridLayout()
-        
+        # Images Grid
+        images_grid = QHBoxLayout()
+        images_grid.setSpacing(16)
+
         # Original Image
-        original_section = QVBoxLayout()
-        original_label = QLabel("Original Image")
-        original_label.setStyleSheet("font-weight: bold; color: #2d3436;")
-        original_section.addWidget(original_label)
+        original_section = self._create_section("Original Image")
         self.original_viewer = ImageViewer()
-        original_section.addWidget(self.original_viewer)
-        images_grid.addLayout(original_section, 0, 0)
+        original_section.layout().addWidget(self.original_viewer)
+        images_grid.addWidget(original_section)
 
         # Stego Image
-        stego_section = QVBoxLayout()
-        stego_label = QLabel("Stego Image")
-        stego_label.setStyleSheet("font-weight: bold; color: #2d3436;")
-        stego_section.addWidget(stego_label)
+        stego_section = self._create_section("Stego Image")
         self.stego_viewer = ImageViewer()
-        stego_section.addWidget(self.stego_viewer)
-        images_grid.addLayout(stego_section, 0, 1)
-
-        # Histogram
-        histogram_section = QVBoxLayout()
-        histogram_label = QLabel("Histogram")
-        histogram_label.setStyleSheet("font-weight: bold; color: #2d3436;")
-        histogram_section.addWidget(histogram_label)
-        self.histogram_viewer = ImageViewer()
-        histogram_section.addWidget(self.histogram_viewer)
-        images_grid.addLayout(histogram_section, 1, 0)
-
-        # Difference
-        difference_section = QVBoxLayout()
-        difference_label = QLabel("Difference")
-        difference_label.setStyleSheet("font-weight: bold; color: #2d3436;")
-        difference_section.addWidget(difference_label)
-        self.difference_viewer = ImageViewer()
-        difference_section.addWidget(self.difference_viewer)
-        images_grid.addLayout(difference_section, 1, 1)
+        stego_section.layout().addWidget(self.stego_viewer)
+        images_grid.addWidget(stego_section)
 
         content_layout.addLayout(images_grid)
 
-        # Analysis Results
-        results_frame = QFrame()
-        results_frame.setStyleSheet("""
-            QFrame {
-                background-color: #f8f9fa;
-                border-radius: 8px;
-                padding: 10px;
-            }
-        """)
-        results_layout = QHBoxLayout(results_frame)
-
-        self.psnr_label = QLabel("PSNR: -")
-        self.mse_label = QLabel("MSE: -")
-        self.capacity_label = QLabel("Capacity: -")
+        # Metrics Section
+        metrics_section = self._create_section("Analysis Results")
+        metrics_layout = QGridLayout()
+        metrics_layout.setColumnStretch(1, 1)
         
-        for label in [self.psnr_label, self.mse_label, self.capacity_label]:
+        self.metrics_labels = {
+            'psnr': QLabel("PSNR: -"),
+            'mse': QLabel("MSE: -"),
+            'ssim': QLabel("SSIM: -"),
+            'histogram_diff': QLabel("Histogram Difference: -"),
+            'chi_square': QLabel("Chi-Square: -")
+        }
+
+        row = 0
+        for key, label in self.metrics_labels.items():
             label.setStyleSheet("""
                 QLabel {
-                    color: #2d3436;
+                    color: #ffffff;
                     font-size: 13px;
-                    padding: 5px 10px;
+                    padding: 4px 0;
                 }
             """)
-            results_layout.addWidget(label)
+            metrics_layout.addWidget(label, row, 0)
+            row += 1
 
-        content_layout.addWidget(results_frame)
+        metrics_section.layout().addLayout(metrics_layout)
+        content_layout.addWidget(metrics_section)
 
         # Buttons
-        btn_layout = QHBoxLayout()
-        self.load_original_btn = QPushButton("Load Original")
-        self.load_stego_btn = QPushButton("Load Stego")
-        self.analyze_btn = QPushButton("Analyze")
+        button_layout = QHBoxLayout()
+        button_layout.setSpacing(8)
 
-        for btn in [self.load_original_btn, self.load_stego_btn, self.analyze_btn]:
-            btn.setStyleSheet("""
-                QPushButton {
-                    background-color: #0066ff;
-                    color: white;
-                    border-radius: 6px;
-                    padding: 8px 15px;
-                    font-size: 13px;
-                }
-                QPushButton:hover {
-                    background-color: #0052cc;
-                }
-            """)
-            btn_layout.addWidget(btn)
+        self.load_original_btn = self._create_button("Load Original")
+        self.load_stego_btn = self._create_button("Load Stego")
+        self.analyze_btn = self._create_button("Analyze")
+        
+        button_layout.addWidget(self.load_original_btn)
+        button_layout.addWidget(self.load_stego_btn)
+        button_layout.addWidget(self.analyze_btn)
+        button_layout.addStretch()
 
-        content_layout.addLayout(btn_layout)
+        content_layout.addLayout(button_layout)
         layout.addWidget(content)
 
         # Connect buttons
@@ -135,21 +114,108 @@ class AnalysisTab(QWidget):
 
         self.setLayout(layout)
 
+    def _create_section(self, title):
+        section = QWidget()
+        section.setStyleSheet("""
+            QWidget {
+                background-color: #2b2b2b;
+                border-radius: 6px;
+            }
+        """)
+        layout = QVBoxLayout(section)
+        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setSpacing(8)
+
+        label = QLabel(title)
+        label.setStyleSheet("""
+            QLabel {
+                color: #ffffff;
+                font-size: 12px;
+                font-weight: 500;
+            }
+        """)
+        layout.addWidget(label)
+        return section
+
+    def _create_button(self, text):
+        btn = QPushButton(text)
+        btn.setStyleSheet("""
+            QPushButton {
+                background-color: #363636;
+                color: #ffffff;
+                border: 1px solid #404040;
+                border-radius: 3px;
+                padding: 5px 15px;
+                font-size: 12px;
+            }
+            QPushButton:hover {
+                background-color: #404040;
+                border: 1px solid #4d4d4d;
+            }
+        """)
+        return btn
+
+    def analyze(self):
+        if not self.original_viewer.get_image_path() or not self.stego_viewer.get_image_path():
+            self.show_dark_message("Warning", "Please load both original and stego images!", 
+                                 QMessageBox.Icon.Warning)
+            return
+
+        try:
+            # Get analysis results
+            metrics = self.analyst.calculate_metrics(
+                self.original_viewer.get_image_path(),
+                self.stego_viewer.get_image_path()
+            )
+            
+            # Update metrics labels
+            self.metrics_labels['psnr'].setText(f"PSNR: {metrics['psnr']:.2f} dB")
+            self.metrics_labels['mse'].setText(f"MSE: {metrics['mse']:.6f}")
+            self.metrics_labels['ssim'].setText(f"SSIM: {metrics['ssim']:.4f}")
+            self.metrics_labels['histogram_diff'].setText(f"Histogram Difference: {metrics['histogram_difference']:.2f}")
+            self.metrics_labels['chi_square'].setText(f"Chi-Square: {metrics['chi_square']:.2f}")
+
+            self.show_dark_message("Success", "Analysis completed successfully!")
+
+        except Exception as e:
+            self.show_dark_message("Error", f"An error occurred: {str(e)}", 
+                                 QMessageBox.Icon.Critical)
+
+    def show_dark_message(self, title, message, icon=QMessageBox.Icon.Information):
+        msg = QMessageBox()
+        msg.setWindowTitle(title)
+        msg.setText(message)
+        msg.setIcon(icon)
+        msg.setStyleSheet("""
+            QMessageBox {
+                background-color: #2b2b2b;
+                color: #ffffff;
+            }
+            QMessageBox QLabel {
+                color: #ffffff;
+            }
+            QPushButton {
+                background-color: #363636;
+                color: #ffffff;
+                border: 1px solid #404040;
+                border-radius: 3px;
+                padding: 5px 15px;
+                min-width: 80px;
+            }
+            QPushButton:hover {
+                background-color: #404040;
+            }
+        """)
+        msg.exec()
+
     def load_original(self):
         file_name, _ = QFileDialog.getOpenFileName(
-            self, "Select Original Image", "", "Image Files (*.png *.jpg *.jpeg *.bmp)")
+            self, "Open Original Image", "", "Image Files (*.png *.jpg *.jpeg)")
         if file_name:
             self.original_viewer.load_image(file_name)
 
     def load_stego(self):
         file_name, _ = QFileDialog.getOpenFileName(
-            self, "Select Stego Image", "", "Image Files (*.png *.jpg *.jpeg *.bmp)")
+            self, "Open Stego Image", "", "Image Files (*.png *.jpg *.jpeg)")
         if file_name:
-            self.stego_viewer.load_image(file_name)
-
-    def analyze(self):
-        if self.original_viewer.get_image_path() and self.stego_viewer.get_image_path():
-            # TODO: Implement analysis logic
-            self.psnr_label.setText("PSNR: 45.3 dB")
-            self.mse_label.setText("MSE: 0.0019")
-            self.capacity_label.setText("Capacity: 1024 bytes") 
+            self.stego_viewer.load_image(file_name) 
