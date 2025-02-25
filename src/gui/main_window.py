@@ -11,8 +11,8 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Steganography")
-        self.setGeometry(100, 100, 1200, 700)
-        self.setMinimumSize(1000, 600)  # Thêm kích thước tối thiểu
+        self.setGeometry(100, 100, 1400, 900)
+        self.setMinimumSize(1200, 800)  # Thêm kích thước tối thiểu
         self.setStyleSheet("""
             QMainWindow {
                 background-color: #f0f2f5;
