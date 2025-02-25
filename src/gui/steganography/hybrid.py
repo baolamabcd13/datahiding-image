@@ -8,156 +8,123 @@ from hashlib import sha256
 class HybridSteganography:
     def __init__(self):
         self.delimiter = "$$END$$"
+        self.wavelet = 'haar'
 
     def _get_key_from_password(self, password):
+        """Generate Fernet key from password"""
         if not password:
-            return None
+            raise ValueError("Password is required for Hybrid method")
         key = sha256(password.encode()).digest()
-        return base64.urlsafe_b64encode(key[:32])
+        return base64.urlsafe_b64encode(key)
 
     def _encrypt_message(self, message, password):
-        if not password:
-            return message.encode()
-        
+        """Encrypt message using Fernet encryption"""
         key = self._get_key_from_password(password)
         f = Fernet(key)
         return f.encrypt(message.encode())
 
     def _decrypt_message(self, encrypted_message, password):
-        if not password:
-            return encrypted_message.decode()
-        
+        """Decrypt message using Fernet encryption"""
         key = self._get_key_from_password(password)
         f = Fernet(key)
         return f.decrypt(encrypted_message).decode()
 
-    def encode(self, image_path, message, password=None):
-        # Read image
+    def encode(self, image_path, message, password):
+        # Đọc ảnh
         image = cv2.imread(image_path)
         if image is None:
             raise ValueError("Could not read image")
 
-        # Split message into two parts
-        message_length = len(message)
-        dwt_message = message[:message_length//2]
-        lsb_message = message[message_length//2:]
+        # Mã hóa tin nhắn
+        encrypted = self._encrypt_message(message + self.delimiter, password)
+        binary_message = ''.join(format(byte, '08b') for byte in encrypted)
 
-        # Encrypt both parts
-        encrypted_dwt = self._encrypt_message(dwt_message + "$$DWT$$", password)
-        encrypted_lsb = self._encrypt_message(lsb_message + "$$LSB$$", password)
+        # Tách kênh màu
+        b, g, r = cv2.split(image)
 
-        # DWT embedding
-        ycbcr = cv2.cvtColor(image, cv2.COLOR_BGR2YCR_CB)
-        y, cr, cb = cv2.split(ycbcr)
-        
-        coeffs = pywt.dwt2(y, 'haar')
+        # Áp dụng DWT cho kênh xanh
+        coeffs = pywt.dwt2(b.astype(float), self.wavelet)
         cA, (cH, cV, cD) = coeffs
 
-        binary_dwt = ''.join(format(byte, '08b') for byte in encrypted_dwt)
-        dwt_length = len(binary_dwt)
-
-        # Check DWT capacity
-        max_dwt_capacity = (cA.shape[0] * cA.shape[1]) // 2
-        if dwt_length > max_dwt_capacity:
-            raise ValueError(f"DWT message too large. Maximum capacity: {max_dwt_capacity} bits")
-
-        # Embed in DWT coefficients
+        # Nhúng tin nhắn vào cả hệ số DWT và LSB
         msg_idx = 0
-        modified_cA = cA.copy()
-        for i in range(cA.shape[0]):
-            for j in range(cA.shape[1]):
-                if msg_idx < dwt_length:
-                    modified_cA[i, j] = np.floor(cA[i, j])
-                    if binary_dwt[msg_idx] == '1':
-                        modified_cA[i, j] += 0.5
+        modified_cH = cH.copy()
+        modified_b = b.copy()
+
+        for i in range(cH.shape[0]):
+            for j in range(cH.shape[1]):
+                if msg_idx < len(binary_message):
+                    # Nhúng vào DWT
+                    if binary_message[msg_idx] == '1':
+                        modified_cH[i, j] = 50
+                    else:
+                        modified_cH[i, j] = -50
+
+                    # Nhúng vào LSB của pixel tương ứng
+                    if binary_message[msg_idx] == '1':
+                        modified_b[i*2, j*2] = modified_b[i*2, j*2] | 1
+                    else:
+                        modified_b[i*2, j*2] = modified_b[i*2, j*2] & ~1
+                    
                     msg_idx += 1
 
-        # Inverse DWT
-        modified_coeffs = (modified_cA, (cH, cV, cD))
-        modified_y = pywt.idwt2(modified_coeffs, 'haar')
-        modified_y = np.clip(modified_y, 0, 255).astype(np.uint8)
+        # Áp dụng IDWT
+        coeffs = (cA, (modified_cH, cV, cD))
+        dwt_b = pywt.idwt2(coeffs, self.wavelet)
+        dwt_b = np.clip(dwt_b, 0, 255).astype(np.uint8)
 
-        # LSB embedding
-        binary_lsb = ''.join(format(byte, '08b') for byte in encrypted_lsb)
-        lsb_length = len(binary_lsb)
+        # Kết hợp DWT và LSB
+        final_b = cv2.addWeighted(dwt_b, 0.7, modified_b, 0.3, 0)
+        
+        # Tạo ảnh stego
+        stego = cv2.merge([final_b, g, r])
+        return stego
 
-        # Check LSB capacity
-        max_lsb_capacity = (cr.shape[0] * cr.shape[1]) // 2
-        if lsb_length > max_lsb_capacity:
-            raise ValueError(f"LSB message too large. Maximum capacity: {max_lsb_capacity} bits")
-
-        # Embed in Cr channel using LSB
-        msg_idx = 0
-        modified_cr = cr.copy()
-        for i in range(cr.shape[0]):
-            for j in range(cr.shape[1]):
-                if msg_idx < lsb_length:
-                    modified_cr[i, j] = (modified_cr[i, j] & 254) | int(binary_lsb[msg_idx])
-                    msg_idx += 1
-
-        # Reconstruct image
-        modified_ycbcr = cv2.merge([modified_y, modified_cr, cb])
-        stego_image = cv2.cvtColor(modified_ycbcr, cv2.COLOR_YCR_CB2BGR)
-
-        return stego_image
-
-    def decode(self, stego_image_path, password=None):
-        # Read stego image
-        stego_image = cv2.imread(stego_image_path)
-        if stego_image is None:
+    def decode(self, stego_image_path, password):
+        # Đọc ảnh stego
+        stego = cv2.imread(stego_image_path)
+        if stego is None:
             raise ValueError("Could not read stego image")
 
-        # Convert to YCbCr
-        ycbcr = cv2.cvtColor(stego_image, cv2.COLOR_BGR2YCR_CB)
-        y, cr, cb = cv2.split(ycbcr)
+        # Lấy kênh xanh
+        blue = stego[:, :, 0]
 
-        # Extract DWT message
-        coeffs = pywt.dwt2(y, 'haar')
-        cA, _ = coeffs
+        # Trích xuất từ DWT
+        coeffs = pywt.dwt2(blue.astype(float), self.wavelet)
+        _, (cH, _, _) = coeffs
 
-        binary_dwt = ''
-        for i in range(cA.shape[0]):
-            for j in range(cA.shape[1]):
-                decimal_part = cA[i, j] - np.floor(cA[i, j])
-                bit = '1' if decimal_part >= 0.4 else '0'
-                binary_dwt += bit
+        # Trích xuất bit từ cả DWT và LSB
+        binary_message = ''
+        for i in range(cH.shape[0]):
+            for j in range(cH.shape[1]):
+                if len(binary_message) >= 20000:
+                    break
+                
+                # Lấy bit từ DWT
+                dwt_bit = '1' if cH[i, j] > 0 else '0'
+                # Lấy bit từ LSB
+                lsb_bit = '1' if (blue[i*2, j*2] & 1) else '0'
+                
+                # Chọn bit phổ biến hơn
+                binary_message += dwt_bit if dwt_bit == lsb_bit else dwt_bit
 
-        # Extract LSB message
-        binary_lsb = ''
-        for i in range(cr.shape[0]):
-            for j in range(cr.shape[1]):
-                binary_lsb += str(cr[i, j] & 1)
+                # Thử giải mã sau mỗi 64 bit
+                if len(binary_message) % 64 == 0:
+                    try:
+                        bytes_data = bytearray()
+                        for k in range(0, len(binary_message), 8):
+                            if k + 8 <= len(binary_message):
+                                bytes_data.append(int(binary_message[k:k+8], 2))
+                        
+                        decrypted = self._decrypt_message(bytes(bytes_data), password)
+                        if self.delimiter in decrypted:
+                            return decrypted[:decrypted.index(self.delimiter)]
+                    except:
+                        continue
 
-        # Convert binary to bytes
-        dwt_bytes = bytearray()
-        for i in range(0, len(binary_dwt), 8):
-            byte = binary_dwt[i:i+8]
-            if len(byte) == 8:
-                dwt_bytes.append(int(byte, 2))
-
-        lsb_bytes = bytearray()
-        for i in range(0, len(binary_lsb), 8):
-            byte = binary_lsb[i:i+8]
-            if len(byte) == 8:
-                lsb_bytes.append(int(byte, 2))
-
-        try:
-            # Decrypt both parts
-            dwt_decrypted = self._decrypt_message(bytes(dwt_bytes), password)
-            lsb_decrypted = self._decrypt_message(bytes(lsb_bytes), password)
-
-            # Extract messages and remove delimiters
-            if "$$DWT$$" in dwt_decrypted and "$$LSB$$" in lsb_decrypted:
-                dwt_message = dwt_decrypted[:dwt_decrypted.index("$$DWT$$")]
-                lsb_message = lsb_decrypted[:lsb_decrypted.index("$$LSB$$")]
-                return dwt_message + lsb_message
-        except:
-            raise ValueError("Invalid password or corrupted message")
-
-        return None
+        raise ValueError("No valid message found or incorrect password")
 
     def calculate_metrics(self, original_image_path, stego_image_path):
-        """Calculate PSNR, MSE and capacity"""
         original = cv2.imread(original_image_path)
         stego = cv2.imread(stego_image_path)
 
@@ -167,25 +134,18 @@ class HybridSteganography:
         if original.shape != stego.shape:
             raise ValueError("Images have different dimensions")
 
-        # Calculate MSE
         mse = np.mean((original - stego) ** 2)
-        
-        # Calculate PSNR
         if mse == 0:
             psnr = float('inf')
         else:
             psnr = 20 * np.log10(255.0 / np.sqrt(mse))
 
-        # Calculate total capacity (DWT + LSB)
-        y = cv2.cvtColor(original, cv2.COLOR_BGR2YCR_CB)[0]
-        coeffs = pywt.dwt2(y, 'haar')
-        cA, _ = coeffs
-        dwt_capacity = (cA.shape[0] * cA.shape[1]) // 16  # Using half for DWT
-        lsb_capacity = (original.shape[0] * original.shape[1]) // 16  # Using half for LSB
-        total_capacity = dwt_capacity + lsb_capacity
+        # Tính dung lượng
+        height, width = original.shape[:2]
+        capacity = (height * width) // 16  # Dung lượng cho hybrid
 
         return {
             'psnr': psnr,
             'mse': mse,
-            'capacity': total_capacity
+            'capacity': capacity
         } 

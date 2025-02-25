@@ -24,9 +24,9 @@ class LSBSteganography:
 
     def can_encode(self, image, message):
         """Check if the message can fit in the image"""
-        max_bytes = (image.shape[0] * image.shape[1] * 3) // 8
-        message_size = len(message) + len(self.delimiter)
-        return message_size < max_bytes
+        max_bytes = (image.shape[0] * image.shape[1] * image.shape[2]) // 8
+        message_size = len(message + self.delimiter)
+        return message_size <= max_bytes
 
     def encode(self, image_path, message):
         """Hide message in image using LSB steganography"""
@@ -56,25 +56,30 @@ class LSBSteganography:
 
     def decode(self, stego_image_path):
         """Extract hidden message from stego image"""
-        # Read stego image
         stego_image = cv2.imread(stego_image_path)
         if stego_image is None:
             raise ValueError("Could not read stego image")
 
-        # Convert image to binary string
+        # Get LSB of each byte
         binary_data = ''
         stego_flat = stego_image.flatten()
+        
+        # Extract until we find the delimiter
+        for byte in stego_flat:
+            binary_data += str(byte & 1)  # Get LSB
+            # Try to convert each 8 bits to character
+            if len(binary_data) >= 8:
+                # Convert binary string to text
+                all_bytes = [binary_data[i:i+8] for i in range(0, len(binary_data), 8)]
+                decoded_text = ''
+                for byte in all_bytes:
+                    if len(byte) == 8:
+                        decoded_text += chr(int(byte, 2))
+                        # Check if we found the delimiter
+                        if decoded_text.endswith(self.delimiter):
+                            return decoded_text[:-len(self.delimiter)]
 
-        # Extract LSB from each pixel
-        for pixel in stego_flat:
-            binary_data += str(pixel & 1)
-            # Try to find delimiter in extracted text
-            if len(binary_data) % 8 == 0:
-                text = self.binary_to_text(binary_data)
-                if self.delimiter in text:
-                    return text
-
-        return None
+        return None  # No message found or delimiter not found
 
     def calculate_metrics(self, original_image_path, stego_image_path):
         """Calculate PSNR and MSE between original and stego images"""
@@ -96,8 +101,8 @@ class LSBSteganography:
         else:
             psnr = 20 * np.log10(255.0 / np.sqrt(mse))
 
-        # Calculate embedding capacity (in bytes)
-        capacity = (original.shape[0] * original.shape[1] * 3) // 8
+        # Calculate capacity (in bytes)
+        capacity = (original.shape[0] * original.shape[1] * original.shape[2]) // 8
 
         return {
             'psnr': psnr,
