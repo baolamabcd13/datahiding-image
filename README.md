@@ -18,6 +18,7 @@ Phần 1: Giới thiệu và Tổng quan
 
 1. Clone repository:  
    git clone https://github.com/baolamabcd13/datahiding-image
+   cd datahiding-image
 
 2. Cài đặt các thư viện cần thiết:
    pip install -r requirements.txt
@@ -91,40 +92,87 @@ I. GIỚI THIỆU
 II. CƠ SỞ LÝ THUYẾT
 
 1. LSB (Least Significant Bit)
-   Nguyên lý: Thay đổi bit cuối của pixel
-   Ưu điểm:
-   Đơn giản, dễ triển khai
-   Dung lượng giấu tin lớn
-   Nhược điểm: Dễ bị phát hiện
+   a. Nguyên lý hoạt động:
+
+   - Mỗi pixel trong ảnh được biểu diễn bởi các giá trị RGB (8 bit/kênh màu)
+   - Thay đổi bit cuối cùng (LSB) của mỗi kênh màu để giấu thông tin
+   - Mỗi pixel có thể giấu 3 bit thông tin (1 bit/kênh màu)
+   - Thông tin cần giấu được chuyển thành dãy bit nhị phân trước khi nhúng
+     b. Chức năng:
+   - Mã hóa tin nhắn thành dãy bit
+   - Quét từng pixel và thay đổi LSB
+   - Lưu trữ metadata (độ dài tin nhắn, checksum)
+   - Trích xuất tin nhắn bằng cách đọc LSB
+
 2. DWT (Discrete Wavelet Transform)
-   Nguyên lý: Biến đổi sóng con rời rạc
-   Ưu điểm:
-   Khó phát hiện
-   Chất lượng ảnh tốt
-   Nhược điểm: Dung lượng giấu tin thấp
+   a. Nguyên lý hoạt động:
+
+   - Phân tách ảnh thành 4 band tần số (LL, LH, HL, HH)
+   - LL: chi tiết thấp tần (approximation)
+   - LH, HL: chi tiết theo chiều dọc và ngang
+   - HH: chi tiết cao tần
+   - Nhúng thông tin vào các hệ số wavelet của band tần số phù hợp
+     b. Chức năng:
+   - Biến đổi DWT 2D trên ảnh
+   - Chọn band tần số và hệ số để nhúng
+   - Điều chỉnh cường độ nhúng (alpha)
+   - Biến đổi ngược IDWT để tạo ảnh stego
+
 3. Hybrid
-   Nguyên lý: Kết hợp LSB và DWT
-   Ưu điểm:
-   Tăng độ an toàn
-   Cân bằng dung lượng và chất lượng
-   Nhược điểm: Phức tạp trong triển khai
+   a. Nguyên lý hoạt động:
+   - Kết hợp ưu điểm của cả LSB và DWT
+   - Phân chia thông tin cần giấu thành 2 phần
+   - Phần 1: Giấu bằng LSB trong vùng ít quan trọng
+   - Phần 2: Giấu bằng DWT trong các band tần số
+   - Sử dụng mã hóa để tăng bảo mật
+     b. Chức năng:
+   - Phân tích ảnh để xác định vùng thích hợp
+   - Điều phối việc giấu tin giữa LSB và DWT
+   - Quản lý khóa và mã hóa
+   - Tối ưu hóa tỷ lệ phân chia dữ liệu
 
 III. THIẾT KẾ HỆ THỐNG
-steganography-app/
-├── main.py # Entry point
-├── src/
-│ └── gui/
-│ ├── steganography/ # Các thuật toán
-│ ├── tabs/ # Giao diện
-│ └── widgets/ # Components 2. Các module chính
-Steganography Module: Xử lý thuật toán
-GUI Module: Giao diện người dùng
-Analysis Module: Phân tích và đánh giá 3. Công nghệ sử dụng
-PyQt6: GUI Framework
-OpenCV: Xử lý ảnh
-NumPy: Tính toán ma trận
-PyWavelets: Biến đổi DWT
-Cryptography: Mã hóa dữ liệu
+
+1. Kiến trúc hệ thống
+   a. Steganography Module:
+
+   - LSBEncoder/Decoder: Xử lý giấu/trích xuất LSB
+   - DWTEncoder/Decoder: Xử lý biến đổi wavelet
+   - HybridEncoder/Decoder: Điều phối hai phương pháp
+   - CryptoManager: Quản lý mã hóa và khóa
+
+   b. GUI Module:
+
+   - MainWindow: Cửa sổ chính của ứng dụng
+   - HideTab: Giao diện giấu tin
+   - ExtractTab: Giao diện trích xuất
+   - AnalysisTab: Giao diện phân tích
+   - CustomWidgets: Các component tùy chỉnh
+
+   c. Analysis Module:
+
+   - QualityAnalyzer: Tính toán các metrics
+   - HistogramAnalyzer: Phân tích histogram
+   - SecurityTester: Kiểm tra độ an toàn
+   - ReportGenerator: Tạo báo cáo kết quả
+
+2. Luồng xử lý
+   a. Quá trình giấu tin:
+
+   - Tiền xử lý ảnh và thông điệp
+   - Kiểm tra dung lượng có thể giấu
+   - Mã hóa thông điệp (nếu có)
+   - Thực hiện giấu tin theo phương pháp đã chọn
+   - Lưu metadata và checksum
+   - Tạo ảnh stego
+
+   b. Quá trình trích xuất:
+
+   - Đọc metadata từ ảnh stego
+   - Xác thực checksum
+   - Trích xuất dữ liệu theo phương pháp tương ứng
+   - Giải mã thông điệp (nếu có)
+   - Kiểm tra tính toàn vẹn
 
 IV. TRIỂN KHAI
 
