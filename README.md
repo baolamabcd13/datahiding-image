@@ -16,12 +16,30 @@ Phần 1: Giới thiệu và Tổng quan
 
 ### Cài đặt
 
-1. Clone repository:  
-   git clone https://github.com/baolamabcd13/datahiding-image
-   cd datahiding-image
+# 1. Clone repository:
 
-2. Cài đặt các thư viện cần thiết:
-   pip install -r requirements.txt
+```bash
+git clone https://github.com/baolamabcd13/datahiding-image
+cd datahiding-image
+```
+
+# 2. Cài đặt python3.10:
+
+```bash
+sudo apt install python3.10
+```
+
+# 3. Cài đặt môi trường ảo cho window:
+
+```bash
+python3.10 -m venv venv
+venv\Scripts\activate
+```
+
+# 4. Cài đặt các thư viện cần thiết:
+
+```bash
+pip install -r requirements.txt
 
 3. Chạy ứng dụng:
    python main.py
@@ -214,3 +232,4 @@ VI. KẾT LUẬN
 So sánh được ưu nhược điểm các phương pháp
 Tạo được công cụ hữu ích cho việc giấu tin
 Đáp ứng các yêu cầu đề ra
+```
