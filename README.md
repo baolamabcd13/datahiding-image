@@ -42,7 +42,7 @@ venv\Scripts\activate
 pip install -r requirements.txt
 
 3. Chạy ứng dụng:
-   python main.py
+   python src/main.py
 
 4. Sử dụng:
 
